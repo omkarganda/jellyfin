@@ -162,6 +162,13 @@ public class NextUpService : INextUpService
             .ToList();
         var lwQuery = context.BaseItems.AsNoTracking().Where(e => allLastWatchedIds.Contains(e.Id));
         lwQuery = _queryHelpers.ApplyNavigations(lwQuery, filter);
+        // UserData must always be included for Next Up candidate and special resolution,
+        // even if the incoming query has EnableUserData = false (e.g. from an API request).
+        if (filter.DtoOptions is { EnableUserData: false })
+        {
+            lwQuery = lwQuery.Include(e => e.UserData);
+        }
+
         var lastWatchedEpisodes = lwQuery.ToDictionary(e => e.Id);
 
         Dictionary<string, List<BaseItemEntity>> specialsBySeriesKey = new();
@@ -174,7 +181,13 @@ public class NextUpService : INextUpService
                 .Where(e => e.ParentIndexNumber == 0)
                 .Where(e => !e.IsVirtualItem);
             specialsQuery = _queryHelpers.ApplyAccessFiltering(context, specialsQuery, filter);
-            specialsQuery = _queryHelpers.ApplyNavigations(specialsQuery, filter).AsSingleQuery();
+            specialsQuery = _queryHelpers.ApplyNavigations(specialsQuery, filter);
+            if (filter.DtoOptions is { EnableUserData: false })
+            {
+                specialsQuery = specialsQuery.Include(e => e.UserData);
+            }
+
+            specialsQuery = specialsQuery.AsSingleQuery();
 
             foreach (var special in specialsQuery)
             {
@@ -309,7 +322,13 @@ public class NextUpService : INextUpService
         if (nextEpisodeIds.Count > 0)
         {
             var nextQuery = context.BaseItems.AsNoTracking().Where(e => nextEpisodeIds.Contains(e.Id));
-            nextQuery = _queryHelpers.ApplyNavigations(nextQuery, filter).AsSingleQuery();
+            nextQuery = _queryHelpers.ApplyNavigations(nextQuery, filter);
+            if (filter.DtoOptions is { EnableUserData: false })
+            {
+                nextQuery = nextQuery.Include(e => e.UserData);
+            }
+
+            nextQuery = nextQuery.AsSingleQuery();
             nextEpisodes = nextQuery.ToDictionary(e => e.Id);
         }
 

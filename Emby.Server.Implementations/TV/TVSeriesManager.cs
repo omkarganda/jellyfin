@@ -117,9 +117,20 @@ namespace Emby.Server.Implementations.TV
             var includeSpecials = _configurationManager.Configuration.DisplaySpecialsWithinSeasons;
             var includeRewatching = request.EnableRewatching;
 
+            var batchDtoOptions = new DtoOptions
+            {
+                Fields = dtoOptions.Fields,
+                ImageTypes = dtoOptions.ImageTypes,
+                ImageTypeLimit = dtoOptions.ImageTypeLimit,
+                EnableImages = dtoOptions.EnableImages,
+                AddProgramRecordingInfo = dtoOptions.AddProgramRecordingInfo,
+                EnableUserData = true,
+                AddCurrentProgram = dtoOptions.AddCurrentProgram
+            };
+
             var query = new InternalItemsQuery(user)
             {
-                DtoOptions = dtoOptions
+                DtoOptions = batchDtoOptions
             };
 
             var batchResult = _libraryManager.GetNextUpEpisodesBatch(query, seriesKeys, includeSpecials, includeRewatching);
@@ -227,12 +238,11 @@ namespace Emby.Server.Implementations.TV
             if (nextEpisode is not null && !includeResumable)
             {
                 // The resume progress may live on an alternate version
-                foreach (var version in nextEpisode.GetAllVersions())
+                var versions = nextEpisode.GetAllVersions();
+                var userDataByVersion = _userDataManager.GetUserDataBatch(versions, user);
+                if (versions.Any(v => userDataByVersion.TryGetValue(v.Id, out var data) && data.PlaybackPositionTicks > 0))
                 {
-                    if (_userDataManager.GetUserData(user, version)?.PlaybackPositionTicks > 0)
-                    {
-                        return null;
-                    }
+                    return null;
                 }
             }
 

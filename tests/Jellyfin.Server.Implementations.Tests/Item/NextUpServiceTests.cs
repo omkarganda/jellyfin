@@ -4,6 +4,7 @@ using Emby.Server.Implementations.Data;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Server.Implementations.Item;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using Xunit;
 using LinkedChildType = Jellyfin.Database.Implementations.Entities.LinkedChildType;
@@ -53,6 +54,52 @@ public sealed class NextUpServiceTests : SqliteDbTestFixture
         Assert.Equal(_unplayed, batch.NextUp?.Id);
     }
 
+    [Fact]
+    public void GetNextUpEpisodesBatch_WithEnableUserDataFalse_StillPopulatesNextUpUserData()
+    {
+        var query = new InternalItemsQuery(_user)
+        {
+            DtoOptions = new DtoOptions(false)
+            {
+                EnableUserData = false
+            }
+        };
+
+        var batch = _service.GetNextUpEpisodesBatch(
+            query,
+            [SeriesKey],
+            includeSpecials: false,
+            includeWatchedForRewatching: false)[SeriesKey];
+
+        Assert.NotNull(batch.NextUp?.UserData);
+        Assert.NotEmpty(batch.NextUp.UserData);
+        Assert.Equal(50000000, batch.NextUp.UserData.First().PlaybackPositionTicks);
+    }
+
+    [Fact]
+    public void GetNextUpEpisodesBatch_WithEnableUserDataFalse_StillPopulatesSpecialsUserData()
+    {
+        var query = new InternalItemsQuery(_user)
+        {
+            DtoOptions = new DtoOptions(false)
+            {
+                EnableUserData = false
+            }
+        };
+
+        var batch = _service.GetNextUpEpisodesBatch(
+            query,
+            [SeriesKey],
+            includeSpecials: true,
+            includeWatchedForRewatching: false)[SeriesKey];
+
+        Assert.NotNull(batch.Specials);
+        var special = Assert.Single(batch.Specials);
+        Assert.NotNull(special.UserData);
+        Assert.NotEmpty(special.UserData);
+        Assert.True(special.UserData.First().Played);
+    }
+
     private void Seed(JellyfinDbContext context)
     {
         context.Users.Add(_user);
@@ -92,6 +139,38 @@ public sealed class NextUpServiceTests : SqliteDbTestFixture
             ItemId = alternateId,
             UserId = _user.Id,
             CustomDataKey = alternateId.ToString("N"),
+            Played = true,
+            Item = null!,
+            User = null!
+        });
+
+        context.UserData.Add(new UserData
+        {
+            ItemId = _unplayed,
+            UserId = _user.Id,
+            CustomDataKey = _unplayed.ToString("N"),
+            PlaybackPositionTicks = 50000000,
+            Item = null!,
+            User = null!
+        });
+
+        var specialId = Guid.NewGuid();
+        context.BaseItems.Add(new BaseItemEntity
+        {
+            Id = specialId,
+            Type = EpisodeType,
+            Name = "Special 1",
+            SeriesPresentationUniqueKey = SeriesKey,
+            ParentIndexNumber = 0,
+            IndexNumber = 1,
+            PresentationUniqueKey = specialId.ToString("N")
+        });
+
+        context.UserData.Add(new UserData
+        {
+            ItemId = specialId,
+            UserId = _user.Id,
+            CustomDataKey = specialId.ToString("N"),
             Played = true,
             Item = null!,
             User = null!
